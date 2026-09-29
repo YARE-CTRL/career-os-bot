@@ -1,93 +1,65 @@
-# Career OS — WhatsApp Bot
+﻿# Career OS — WhatsApp Bot 🤖
 
-Bot de WhatsApp para automatizar la atención de pagos por Nequi y activación del Plan Pro.
+Bot de atención automatizada para el proceso de pago y activación del **Plan Pro** de Career OS.
 
-## Flujo de conversación
+## ¿Qué hace?
+
+Cuando un usuario hace clic en "Pagar con Nequi" dentro de la app, se abre WhatsApp con un mensaje predefinido. Este bot intercepta ese mensaje y gestiona el proceso automáticamente:
 
 ```
-Usuario (app)     →  "Buen día equipo de Career OS... mi User ID es: xxx"
-Bot               →  "Transfiere $9.900 COP al Nequi 3053421833 y envíanos el comprobante."
-Usuario           →  [envía foto del comprobante]
-Bot               →  "✅ Comprobante recibido. Te activamos en los próximos minutos."
-Tú (admin)        →  Verificas en Nequi, vas a /admin y activas el usuario.
+Usuario  →  Mensaje de pago con su User ID
+Bot      →  Instrucciones de transferencia Nequi
+Usuario  →  Foto del comprobante
+Bot      →  Confirmación de recepción
+Admin    →  Verifica en Nequi → activa en /admin
 ```
 
-## Despliegue en Railway
+## Stack
 
-### 1. Crear repositorio en GitHub
-```bash
-cd career-os-bot
-git init
-git add .
-git commit -m "feat: initial bot setup"
-git remote add origin https://github.com/TU_USUARIO/career-os-bot.git
-git push -u origin main
-```
+- **Runtime:** Node.js 20
+- **WhatsApp:** [whatsapp-web.js](https://wwebjs.dev/)
+- **Web server:** Express (sirve el QR de vinculación)
+- **Hosting:** Railway (Dockerfile)
+- **Sesión:** Persistida en volumen de Railway (`/data`)
 
-### 2. Crear proyecto en Railway
-1. Ve a [railway.app](https://railway.app) y crea un nuevo proyecto.
-2. Selecciona **"Deploy from GitHub repo"** → elige `career-os-bot`.
-3. Railway detectará el `Dockerfile` automáticamente.
+## Despliegue
 
-### 3. Configurar volumen (CRÍTICO para persistir la sesión)
-Sin esto, cada deploy borra la sesión y tendrás que escanear el QR de nuevo.
+### Variables de entorno requeridas
 
-1. En Railway → tu servicio → **"Add Volume"**
-2. Mount path: `/data`
-3. Eso es todo. Los archivos de sesión y el log de pagos vivirán en ese disco persistente.
+Configura las siguientes variables en Railway → Settings → Variables.
+**Nunca las incluyas en el código ni en este repositorio.**
 
-### 4. Configurar variables de entorno
-En Railway → tu servicio → **Settings → Variables**, agrega:
-
-| Variable | Valor |
+| Variable | Descripción |
 |---|---|
-| `NEQUI_NUMBER` | `3053421833` |
-| `PLAN_PRICE` | `9.900` |
-| `PLAN_NAME` | `Plan Pro` |
-| `SESSION_DATA_PATH` | `/data/.wwebjs_auth` |
-| `PAYMENT_LOG_PATH` | `/data/payments.json` |
+| `NEQUI_NUMBER` | Número de Nequi al que los usuarios deben transferir |
+| `PLAN_PRICE` | Precio del plan (solo informativo en los mensajes) |
+| `PLAN_NAME` | Nombre del plan que se muestra en las respuestas |
+| `SESSION_DATA_PATH` | Ruta del volumen donde se guarda la sesión de WhatsApp |
+| `PAYMENT_LOG_PATH` | Ruta del archivo de log de pagos recibidos |
 
-### 5. Escanear el QR
-1. Una vez desplegado, ve a la URL pública de tu servicio en Railway.
-2. Verás un QR en la pantalla.
-3. En tu WhatsApp de negocio: **Dispositivos vinculados → Vincular dispositivo** → Escanear.
-4. Listo. El bot queda activo 24/7.
+### Volumen persistente (obligatorio)
 
-## Desarrollo local (opcional)
+El bot necesita un volumen montado en `/data` para no perder la sesión de WhatsApp entre deploys.
+
+En Railway: **Volumes → Create Volume → Mount path: `/data`**
+
+### Vincular WhatsApp
+
+Una vez desplegado, abre la URL pública del servicio en tu navegador.
+Verás un código QR que debes escanear desde WhatsApp → Dispositivos vinculados.
+
+## Desarrollo local
 
 ```bash
+cp .env.example .env
+# Edita .env con tus valores reales
 npm install
 node src/index.js
 # Visita http://localhost:3001 para ver el QR
 ```
 
-## Log de pagos
+## Nota de seguridad
 
-Cada comprobante recibido se registra en `/data/payments.json`:
-
-```json
-[
-  {
-    "chatId": "573001234567@c.us",
-    "userId": "a1b2c3d4-...",
-    "plan": "monthly",
-    "amount": 9900,
-    "status": "pending_verification",
-    "note": "Comprobante recibido. Verificación manual pendiente.",
-    "createdAt": "2026-09-29T18:00:00.000Z"
-  }
-]
-```
-
-> **Fase 2:** Este archivo se reemplazará por integración directa con Google Sheets para análisis en Power BI.
-
-## Nota de seguridad (`npm audit`)
-
-`npm audit` reporta 5 vulnerabilidades en `extract-zip`, dependencia transitiva de `puppeteer`.  
-**No son explotables en este proyecto** porque el `Dockerfile` incluye:
-
-```
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-```
-
-Esto hace que `puppeteer` use el Chrome instalado del sistema y nunca invoque `extract-zip` para descargar nada. El código vulnerable nunca se ejecuta.
+`npm audit` reporta vulnerabilidades en `extract-zip` (dependencia de Puppeteer).
+**No aplican a este proyecto** — el `Dockerfile` usa `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true`,
+por lo que Puppeteer usa Chrome del sistema operativo y ese código nunca se ejecuta.

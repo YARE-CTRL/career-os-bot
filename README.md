@@ -80,3 +80,14 @@ Cada comprobante recibido se registra en `/data/payments.json`:
 ```
 
 > **Fase 2:** Este archivo se reemplazará por integración directa con Google Sheets para análisis en Power BI.
+
+## Nota de seguridad (`npm audit`)
+
+`npm audit` reporta 5 vulnerabilidades en `extract-zip`, dependencia transitiva de `puppeteer`.  
+**No son explotables en este proyecto** porque el `Dockerfile` incluye:
+
+```
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+```
+
+Esto hace que `puppeteer` use el Chrome instalado del sistema y nunca invoque `extract-zip` para descargar nada. El código vulnerable nunca se ejecuta.

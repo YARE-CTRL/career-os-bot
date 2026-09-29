@@ -87,6 +87,22 @@ function isGreeting(text) {
   return /^\s*(hola|buenas|buen\s?d[ií]a|buenos|hi|hello|ey|saludos|ola)\b/i.test(text);
 }
 
+function isHumanRequest(text) {
+  const t = text.toLowerCase();
+  return (
+    t.includes('asesor') ||
+    t.includes('humano') ||
+    t.includes('hablar con alguien') ||
+    t.includes('hablar con una persona') ||
+    t.includes('agente') ||
+    t.includes('persona real') ||
+    t.includes('soporte') ||
+    t.includes('ayuda humana') ||
+    t.includes('quiero hablar')
+  );
+}
+
+
 // ── Plantillas de respuesta ───────────────────────────────────────────────────
 function msgInstructions(userId) {
   return `¡Hola! 👋 Somos el equipo de *Career OS*.\n\n` +
@@ -105,10 +121,26 @@ function msgReceiptConfirmed() {
 }
 
 function msgGreeting() {
-  return `¡Hola! 👋 Bienvenido a *Career OS*.\n\n` +
-    `Si deseas adquirir el *${PLAN_NAME}* ($${PLAN_PRICE} COP), visita la app y sigue el proceso de pago. ` +
-    `Recibirás un mensaje con tu User ID y los pasos a seguir.\n\n` +
-    `¿En qué te puedo ayudar? 😊`;
+  return `¡Hola! 👋 Bienvenido a *Career OS*, tu plataforma de desarrollo profesional con IA.\n\n` +
+    `¿En qué te puedo ayudar hoy?\n\n` +
+    `1️⃣  *Quiero adquirir el Plan Pro* — Te guío con el pago.\n` +
+    `2️⃣  *Tengo una duda sobre la plataforma* — Escríbeme tu pregunta.\n` +
+    `3️⃣  *Quiero hablar con un asesor* — Escríbeme "quiero hablar con un asesor".\n\n` +
+    `😊 Escríbeme lo que necesitas.`;
+}
+
+function msgHumanHandoff() {
+  return `Entendido 🙌 Voy a conectarte con un miembro de nuestro equipo.\n\n` +
+    `*Un asesor se comunicará contigo en breve.* Puedes seguir escribiendo aquí y lo veremos.\n\n` +
+    `¡Gracias por tu paciencia! 🙏`;
+}
+
+function msgFallback() {
+  return `Entendido 😊 Puedo ayudarte con lo siguiente:\n\n` +
+    `💳 *Pagar el Plan Pro con Nequi* — escríbeme _"quiero pagar"_\n` +
+    `👤 *Hablar con un asesor humano* — escríbeme _"quiero hablar con un asesor"_\n` +
+    `🌐 *Ver la plataforma* — visita *careeros-yare.vercel.app*\n\n` +
+    `¿En qué más te puedo ayudar?`;
 }
 
 function msgWaitingReceipt() {
@@ -116,7 +148,7 @@ function msgWaitingReceipt() {
 }
 
 // ── Estado de conversaciones en memoria ──────────────────────────────────────
-// { chatId → { userId: string|null, step: 'waiting_receipt' | 'receipt_received' } }
+// { chatId → { userId, step: 'waiting_receipt'|'receipt_received'|'human_requested' } }
 const conversations = new Map();
 
 // ── Cliente de WhatsApp ───────────────────────────────────────────────────────
@@ -179,28 +211,40 @@ client.on('message', async (msg) => {
   const body     = msg.body || '';
   const hasMedia = msg.hasMedia;
   const type     = msg.type;
+  const convo    = conversations.get(chatId);
 
   console.log(`[Msg] ${chatId} | tipo:${type} | "${body.slice(0, 100)}"`);
 
+  // ── Si ya está esperando asesor humano, no interrumpir ──────────────────
+  if (convo?.step === 'human_requested') {
+    console.log(`[Human] ⏳ Chat ${chatId} esperando asesor. Mensaje ignorado por bot.`);
+    return;
+  }
+
   // ── Comprobante de pago (imagen) ────────────────────────────────────────
   if (hasMedia && type === 'image') {
-    const convo = conversations.get(chatId);
     if (convo?.step === 'waiting_receipt') {
       conversations.set(chatId, { ...convo, step: 'receipt_received' });
-
       logPayment({
         chatId,
         userId:  convo.userId || 'desconocido',
         plan:    'monthly',
         amount:  9900,
         status:  'pending_verification',
-        note:    'Comprobante recibido. Verificación manual pendiente en la app Nequi.',
+        note:    'Comprobante recibido. Verificación manual pendiente en Nequi.',
       });
-
       await msg.reply(msgReceiptConfirmed());
       console.log(`[Payment] 📸 Comprobante de ${chatId} | userId: ${convo.userId}`);
       return;
     }
+  }
+
+  // ── Solicitud de asesor humano ───────────────────────────────────────────
+  if (isHumanRequest(body)) {
+    conversations.set(chatId, { ...convo, step: 'human_requested' });
+    await msg.reply(msgHumanHandoff());
+    console.log(`[Human] 🙋 Asesor solicitado por ${chatId}`);
+    return;
   }
 
   // ── Mensaje de pago desde la app (botón "Contactar por WhatsApp") ───────
@@ -218,10 +262,14 @@ client.on('message', async (msg) => {
     return;
   }
 
-  // ── Mensaje no reconocido (usuario en espera de comprobante) ─────────────
-  if (conversations.get(chatId)?.step === 'waiting_receipt') {
+  // ── Usuario en espera de comprobante ─────────────────────────────────────
+  if (convo?.step === 'waiting_receipt') {
     await msg.reply(msgWaitingReceipt());
+    return;
   }
+
+  // ── Fallback general (pregunta o mensaje no reconocido) ──────────────────
+  await msg.reply(msgFallback());
 });
 
 // ── Arranque ──────────────────────────────────────────────────────────────────

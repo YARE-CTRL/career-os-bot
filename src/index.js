@@ -48,7 +48,7 @@ app.get('/', (_req, res) => {
 
 app.get('/status', (_req, res) => res.json({ connected: botReady, qrReady: !!latestQR }));
 
-app.listen(PORT, () => console.log(`[Server] Web activo en puerto ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`[Server] Web activo en puerto ${PORT} (0.0.0.0)`));
 
 function html(title, body, extra) {
   return `<!DOCTYPE html><html><head><title>Career OS Bot</title>${extra}</head>
@@ -134,6 +134,9 @@ const client = new Client({
       '--no-zygote',
       '--single-process',
       '--disable-gpu',
+      '--js-flags="--max-old-space-size=256"',
+      '--disable-software-rasterizer',
+      '--disable-features=site-per-process'
     ],
   },
 });

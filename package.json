@@ -1,0 +1,18 @@
+{
+  "name": "career-os-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "Bot de WhatsApp para automatizar pagos y activaciones de Career OS",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "qrcode": "^1.5.4",
+    "whatsapp-web.js": "^1.26.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

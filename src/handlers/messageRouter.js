@@ -30,20 +30,35 @@ function isHumanRequest(text) {
 }
 
 async function routeMessage(msg) {
-  if (msg.fromMe) return;
+  if (msg.fromMe) {
+    if (msg.body && msg.body.trim() === '!fin-asesor') {
+      stateRepo.clearState(msg.to);
+      console.log(`[Admin] 🤖 Bot reactivado manualmente para ${msg.to}`);
+    }
+    return;
+  }
+
   if (isGroup(msg.from)) return;
 
   const chatId = msg.from;
   const body = msg.body || '';
   const hasMedia = msg.hasMedia;
   const type = msg.type;
-  const state = stateRepo.getState(chatId);
+  let state = stateRepo.getState(chatId);
 
   console.log(`[Msg] ${chatId} | tipo:${type} | "${body.slice(0, 100)}"`);
 
+  // Timeout para asesor humano (24 horas = 86400000 ms)
   if (state?.step === 'human_requested') {
-    console.log(`[Human] ⏳ Chat ${chatId} esperando asesor. Mensaje ignorado por bot.`);
-    return;
+    const elapsed = Date.now() - (state.humanRequestedAt || 0);
+    if (elapsed > 86400000) {
+      stateRepo.clearState(chatId);
+      state = null;
+      console.log(`[Admin] ⏳ Timeout de asesor humano expirado para ${chatId}. Bot reactivado.`);
+    } else {
+      console.log(`[Human] ⏳ Chat ${chatId} esperando asesor. Mensaje ignorado por bot.`);
+      return;
+    }
   }
 
   if (hasMedia && type === 'image') {

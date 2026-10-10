@@ -1,9 +1,11 @@
 const stateRepo = require('../repositories/stateRepository');
 const { isGroup } = require('../utils/phone');
+const config = require('../config/env');
 const menuFlow = require('../flows/menu.flow');
 const { handlePaymentRequest, handleReceipt, handleWaitingReceipt } = require('../flows/payment.flow');
 const humanAgentFlow = require('../flows/humanAgent.flow');
 const fallbackFlow = require('../flows/fallback.flow');
+const adminFlow = require('../flows/admin.flow');
 
 function isPaymentRequest(text) {
   const t = text.toLowerCase();
@@ -48,7 +50,12 @@ async function routeMessage(msg) {
 
   console.log(`[Msg] ${chatId} | tipo:${type} | "${body.slice(0, 100)}"`);
 
-  // Timeout para asesor humano (24 horas = 86400000 ms)
+  // Flujo Admin
+  if (chatId === config.ADMIN_NUMBER && body.startsWith('!')) {
+    return adminFlow(msg);
+  }
+
+  // Timeout para asesor humano (24 horas)
   if (state?.step === 'human_requested') {
     const elapsed = Date.now() - (state.humanRequestedAt || 0);
     if (elapsed > 86400000) {

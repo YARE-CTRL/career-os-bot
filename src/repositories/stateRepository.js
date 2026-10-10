@@ -46,8 +46,16 @@ function clearState(chatId) {
   saveState();
 }
 
+function findChatIdByUserId(userId) {
+  for (const [chatId, state] of conversations.entries()) {
+    if (state.userId === userId) return chatId;
+  }
+  return null;
+}
+
 module.exports = {
   getState,
   setState,
-  clearState
+  clearState,
+  findChatIdByUserId
 };

@@ -1,11 +1,13 @@
 const stateRepo = require('../repositories/stateRepository');
-const { isGroup } = require('../utils/phone');
+const { isIgnoredSource, isBotMessageType } = require('../utils/messageGuards');
 const config = require('../config/env');
 const menuFlow = require('../flows/menu.flow');
 const { handlePaymentRequest, handleReceipt, handleWaitingReceipt } = require('../flows/payment.flow');
 const humanAgentFlow = require('../flows/humanAgent.flow');
 const fallbackFlow = require('../flows/fallback.flow');
 const adminFlow = require('../flows/admin.flow');
+
+const RECEIPT_MEDIA_TYPES = ['image', 'document'];
 
 function isPaymentRequest(text) {
   const t = text.toLowerCase();
@@ -40,7 +42,8 @@ async function routeMessage(msg) {
     return;
   }
 
-  if (isGroup(msg.from)) return;
+  // Defensa en profundidad (también filtrado en lifecycle.js)
+  if (isIgnoredSource(msg)) return;
 
   const chatId = msg.from;
   const body = msg.body || '';
@@ -55,6 +58,16 @@ async function routeMessage(msg) {
     return adminFlow(msg);
   }
 
+  // Bots/empresas/sistema: silenciar el chat de forma permanente (anti bucle bot↔bot)
+  if (isBotMessageType(type)) {
+    if (state?.step !== 'ignored_bot') {
+      stateRepo.setState(chatId, { step: 'ignored_bot', ignoredAt: Date.now() });
+      console.log(`[Guard] 🤖 ${chatId} detectado como bot/sistema (${type}). Chat silenciado.`);
+    }
+    return;
+  }
+  if (state?.step === 'ignored_bot') return;
+
   // Timeout para asesor humano (24 horas)
   if (state?.step === 'human_requested') {
     const elapsed = Date.now() - (state.humanRequestedAt || 0);
@@ -68,11 +81,16 @@ async function routeMessage(msg) {
     }
   }
 
-  if (hasMedia && type === 'image') {
+  // Comprobantes: solo imagen/documento y solo si se esperaba uno
+  if (hasMedia && RECEIPT_MEDIA_TYPES.includes(type)) {
     if (state?.step === 'waiting_receipt') {
       return handleReceipt(msg, chatId, state);
     }
+    return;
   }
+
+  // Texto/fallback únicamente para mensajes de tipo 'chat'
+  if (type !== 'chat') return;
 
   if (isHumanRequest(body)) {
     return humanAgentFlow(msg, chatId);

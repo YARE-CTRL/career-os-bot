@@ -1,6 +1,7 @@
 const qrcode = require('qrcode');
 const client = require('./whatsappClient');
 const { routeMessage } = require('../handlers/messageRouter');
+const { isIgnoredSource } = require('../utils/messageGuards');
 
 let latestQR = null;
 let botReady = false;
@@ -36,6 +37,7 @@ function setupLifecycle() {
   });
 
   client.on('message', async (msg) => {
+    if (isIgnoredSource(msg)) return; // estados, difusiones y grupos
     try {
       await routeMessage(msg);
     } catch (err) {
